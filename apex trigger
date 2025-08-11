@@ -1,0 +1,48 @@
+trigger EnrollmentTrigger on Enrollment__c (before insert) {
+    // Step 1: Collect Course IDs from incoming records
+Set<Id> courseIds = new Set<Id>();
+for (Enrollment__c e : Trigger.new) {
+    if (e.Course__c != null) {
+        courseIds.add(e.Course__c);
+    }
+}
+
+if (courseIds.isEmpty()) return;
+
+// Step 2: Count existing enrollments per course
+Map<Id, Integer> courseEnrollmentCounts = new Map<Id, Integer>();
+for (AggregateResult ar : [
+    SELECT Course__c, COUNT(Id) total
+    FROM Enrollment__c
+    WHERE Course__c IN :courseIds
+    GROUP BY Course__c
+]) {
+    courseEnrollmentCounts.put(
+        (Id) ar.get('Course__c'),
+        ((Decimal) ar.get('total')).intValue()
+    );
+}
+
+// Step 3: Fetch Max_Seats__c from Course
+Map<Id, Course__c> courseMap = new Map<Id, Course__c>(
+    [SELECT Id, Max_Seats__c FROM Course__c WHERE Id IN :courseIds]
+);
+
+// Step 4: Validate each Enrollment__c record
+for (Enrollment__c e : Trigger.new) {
+    if (e.Course__c != null) {
+        Integer currentCount = courseEnrollmentCounts.containsKey(e.Course__c)
+            ? courseEnrollmentCounts.get(e.Course__c)
+            : 0;
+
+        Integer maxSeats = courseMap.containsKey(e.Course__c) && courseMap.get(e.Course__c).Max_Seats__c != null
+            ? courseMap.get(e.Course__c).Max_Seats__c.intValue()
+            : 0;
+
+        if (currentCount + 1 > maxSeats) {
+            e.addError('Cannot enroll. The course is already full.');
+        }
+    }
+}
+
+}
