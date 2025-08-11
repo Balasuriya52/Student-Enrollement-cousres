@@ -1,0 +1,54 @@
+@isTest
+public class EnrollmentTriggerTest {
+    @isTest
+static void testCourseFullLogic() {
+    // Step 1: Create a Course with only 1 seat
+    Course__c course = new Course__c(
+        Name = 'Physics',
+        Max_Seats__c = 1,
+        Instructor__c = 'Prof. Balasuriya' // optional: since Instructor__c is text
+    );
+    insert course;
+
+    // Step 2: Create 2 Students
+    Student__c s1 = new Student__c(
+        Name = 'Alice',
+        Email__c = 'a@example.com',
+        Department__c = 'Physics'
+    );
+    Student__c s2 = new Student__c(
+        Name = 'Bob',
+        Email__c = 'b@example.com',
+        Department__c = 'Physics'
+    );
+    insert new List<Student__c>{s1, s2};
+
+    // Step 3: First Enrollment (success)
+    Enrollment__c e1 = new Enrollment__c(
+        Student__c = s1.Id,
+        Course__c = course.Id,
+        StudentCourseKey__c = s1.Id + '-' + course.Id,
+        Enrollment_Date__c = Date.today()
+    );
+    insert e1;
+    System.assertNotEquals(null, e1.Id);
+
+    // Step 4: Second Enrollment (should fail due to max seats = 1)
+    Test.startTest();
+    try {
+        Enrollment__c e2 = new Enrollment__c(
+            Student__c = s2.Id,
+            Course__c = course.Id,
+            StudentCourseKey__c = s2.Id + '-' + course.Id + '-' + DateTime.now().getTime(),
+            Enrollment_Date__c = Date.today()
+        );
+        insert e2;
+        System.assert(false, 'Expected DMLException but insert succeeded.');
+    } catch (DmlException ex) {
+        System.assert(ex.getMessage().contains('full'), 'Unexpected error: ' + ex.getMessage());
+    }
+    Test.stopTest();
+}
+
+
+}
